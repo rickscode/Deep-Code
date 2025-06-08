@@ -252,10 +252,29 @@ def harmonize_file_names(file_map):
         ext_to_files = {}
         for ext in ['.js', '.css', '.html', '.javascript']:
             ext_to_files[ext] = [f for f in file_map if f.endswith(ext)]
-        # For each type, if a standard reference exists but the file is named differently or has a nonstandard extension, rename and update references
+        # For each type, if a standard or referenced name exists but the file is named differently or has a nonstandard extension, rename and update references
         rename_map = {}
+        # Also collect all referenced JS/CSS filenames from HTML (not just standard names)
+        referenced_js = list(references['js'])
+        referenced_css = list(references['css'])
+        # JS: If only one JS file exists and a reference is found, rename to match the reference
+        js_candidates = ext_to_files.get('.js', []) + ext_to_files.get('.javascript', [])
+        if len(js_candidates) == 1 and referenced_js:
+            old_name = js_candidates[0]
+            for ref in referenced_js:
+                if ref not in file_map and ref.endswith('.js'):
+                    rename_map[old_name] = ref
+                    break
+        # CSS: If only one CSS file exists and a reference is found, rename to match the reference
+        css_candidates = ext_to_files.get('.css', [])
+        if len(css_candidates) == 1 and referenced_css:
+            old_name = css_candidates[0]
+            for ref in referenced_css:
+                if ref not in file_map and ref.endswith('.css'):
+                    rename_map[old_name] = ref
+                    break
+        # Standard names fallback (as before)
         for ext, std_name in standard_names.items():
-            # Accept alias extensions (e.g., .javascript for .js)
             candidates = ext_to_files.get(ext, [])
             if ext == '.js':
                 candidates += ext_to_files.get('.javascript', [])
