@@ -2,10 +2,12 @@ import typer
 
 app = typer.Typer(help="ai-code: Open Source CLI Coding Agent")
 
+
 @app.command()
 def version():
     """Show version information."""
     typer.echo("ai-code version 0.1.0")
+
 
 @app.command()
 def chat():
@@ -90,6 +92,7 @@ def chat():
     messages = [
         {"role": "system", "content": system_prompt}
     ]
+
     async def run_agent():
         typer.echo("[Deep Code Agent] Type your request. Type '/exit' to quit.")
         import re
@@ -104,19 +107,15 @@ def chat():
             try:
                 response = await client.chat_completion(messages, model=model)
                 content = response.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-                # Try to extract app/folder name from the user request
                 app_name_match = re.search(r'build (?:me )?a[n]? ([\w\- ]+?)(?: app| web app| project| application|$)', user_input, re.IGNORECASE)
                 if app_name_match:
                     app_name = app_name_match.group(1).strip()
                 else:
                     app_name = 'deep-code-output'
-                # Slugify the folder name
                 folder_name = slugify(app_name)
                 if not folder_name:
                     folder_name = 'deep-code-output'
-                # Try to extract code blocks and guess file names
                 code_blocks = re.findall(r"```([a-zA-Z0-9]*)\n([\s\S]*?)```", content)
-                # Fallback: If no code blocks, but a file list is detected, re-prompt for code
                 if not code_blocks:
                     file_list = []
                     for line in content.splitlines():
@@ -124,15 +123,15 @@ def chat():
                         if m:
                             file_list.append(m.group(1))
                     if file_list:
-                        # Re-prompt the LLM to generate code for each file
-                        followup = f"Please generate the full code for these files, each as a separate markdown code block: {', '.join(file_list)}. Do not output any lists or explanations, just the code blocks."
+                        followup = (
+                            f"Please generate the full code for these files, each as a separate markdown code block: {', '.join(file_list)}. "
+                            "Do not output any lists or explanations, just the code blocks."
+                        )
                         messages.append({"role": "user", "content": followup})
                         response = await client.chat_completion(messages, model=model)
                         content = response.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
                         code_blocks = re.findall(r"```([a-zA-Z0-9]*)\n([\s\S]*?)```", content)
-                # Try to extract file names from the assistant's message
                 file_names = {}
-                # Look for lines like * `filename.ext` or - `filename.ext`
                 for line in content.splitlines():
                     match = re.match(r"[\*-]\s+`([^`]+)`", line.strip())
                     if match:
@@ -141,7 +140,6 @@ def chat():
                 if code_blocks:
                     import os
                     os.makedirs(folder_name, exist_ok=True)
-                    # Build file map: {filename: (lang, code)}
                     file_map = {}
                     for idx, (lang, code) in enumerate(code_blocks):
                         if idx in file_names:
@@ -158,37 +156,36 @@ def chat():
                             else:
                                 file_name = f"{base}_file{idx+1}.{ext}"
                         file_map[file_name] = (lang, code)
-                    # Harmonize file names and references before fixing dependencies
                     file_map = harmonize_file_names(file_map)
-                    # Cross-file dependency fix
                     corrected_map = cross_file_dependency_fix(file_map)
-                    # --- Selector harmonization: ensure JS selectors match HTML IDs/classes ---
                     corrected_map = harmonize_selectors(corrected_map)
-                    # Save files
                     for fname, code in corrected_map.items():
                         file_path = os.path.join(folder_name, fname)
                         file_ops.write_file_atomic(file_path, code)
-                    # --- Post-process: Validate and fix incomplete code files ---
+
                     def is_incomplete_js(js_code):
-                        # Heuristic: unclosed braces, abrupt EOF, missing function/closing
                         open_braces = js_code.count('{')
                         close_braces = js_code.count('}')
                         if open_braces > close_braces:
                             return True
-                        if js_code.strip().endswith(('function', '{', '(', '+', '-', '*', '/', '=')):
+                        if js_code.strip().endswith((
+                            'function', '{', '(', '+', '-', '*', '/', '='
+                        )):
                             return True
-                        # Very short file or abrupt ending
                         if len(js_code.strip()) < 20:
                             return True
                         return False
+
                     for fname in corrected_map:
                         if fname.endswith('.js'):
                             file_path = os.path.join(folder_name, fname)
                             with open(file_path, 'r', encoding='utf-8') as f:
                                 js_code = f.read()
                             if is_incomplete_js(js_code):
-                                # Re-prompt LLM to finish the code
-                                followup = f"The file `{fname}` is incomplete. Please generate the full, working code for this file as a single markdown code block. Do not output any lists or explanations, just the code block."
+                                followup = (
+                                    f"The file `{fname}` is incomplete. Please generate the full, working code for this file as a single markdown code block. "
+                                    "Do not output any lists or explanations, just the code block."
+                                )
                                 messages.append({"role": "user", "content": followup})
                                 response = await client.chat_completion(messages, model=model)
                                 content = response.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
@@ -207,15 +204,18 @@ def chat():
                 typer.echo(f"[UNEXPECTED ERROR] {e}")
     asyncio.run(run_agent())
 
+
 @app.command()
 def edit(file: str):
     """Edit a specific file with AI assistance."""
     typer.echo(f"[edit mode not yet implemented for {file}]")
 
+
 @app.command()
 def analyze(directory: str = "."):
     """Analyze a codebase directory."""
     typer.echo(f"[analyze mode not yet implemented for {directory}]")
+
 
 @app.command()
 def config(set: bool = typer.Option(False, help="Set configuration interactively")):
@@ -228,7 +228,6 @@ def config(set: bool = typer.Option(False, help="Set configuration interactively
     if set:
         typer.echo("Configure your Groq API key and model.")
         api_key = typer.prompt("Enter your Groq API key", default=cfg['api'].get('key', ''))
-        # Update model options to match Groq's available models
         model_options = [
             "deepseek-r1-distill-llama-70b",
             "meta-llama/llama-4-maverick-17b-128e-instruct",
@@ -252,6 +251,7 @@ def config(set: bool = typer.Option(False, help="Set configuration interactively
         typer.echo("Configuration saved.")
     else:
         typer.echo(cfg)
+
 
 def harmonize_file_names(file_map):
         """
@@ -347,6 +347,7 @@ def harmonize_file_names(file_map):
                 code = re.sub(r'(\}\s*)+$', '', code)
             new_file_map[new_name] = (lang, code)
         return new_file_map
+
 
 def cross_file_dependency_fix(file_map):
     """
@@ -471,6 +472,7 @@ def cross_file_dependency_fix(file_map):
             corrected[fname] = code
     return corrected
 
+
 def harmonize_selectors(file_map):
     """
     Cross-checks selectors (IDs/classes) used in JS against HTML, and auto-fixes mismatches.
@@ -534,6 +536,7 @@ def harmonize_selectors(file_map):
             code = re.sub(r'(</body>)', inject_classes, code, count=1)
         new_file_map[fname] = (lang, code)
     return new_file_map
+
 
 if __name__ == "__main__":
     app()
