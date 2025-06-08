@@ -33,4 +33,5 @@ class GroqClient:
         except httpx.RequestError as e:
             raise APIError(f"API request failed: {e}")
         except httpx.HTTPStatusError as e:
-            raise APIError(f"API returned error: {e.response.text}")
+            # Print status code and response text for debugging
+            raise APIError(f"API returned error: {e.response.status_code} {e.response.text}")
