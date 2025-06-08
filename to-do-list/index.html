@@ -2,35 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Todo List App</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-        }
-        ul {
-            list-style: none;
-            padding: 0;
-        }
-        li {
-            padding: 10px;
-            border-bottom: 1px solid #ccc;
-        }
-        li:last-child {
-            border-bottom: none;
-        }
-        .completed {
-            text-decoration: line-through;
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <h1>Todo List App</h1>
-    <input type="text" id="todo-input" placeholder="Add new todo">
-    <button id="add-btn">Add</button>
-    <ul id="todo-list">
-    </ul>
-    <script src="script.js"></script>
+    <input type="text" id="new-todo" placeholder="Enter new todo">
+    <ul id="todo-list"></ul>
+    <script src="app.js"></script>
 </body>
 </html>

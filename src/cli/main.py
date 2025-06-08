@@ -257,21 +257,31 @@ def harmonize_file_names(file_map):
         # Also collect all referenced JS/CSS filenames from HTML (not just standard names)
         referenced_js = list(references['js'])
         referenced_css = list(references['css'])
-        # JS: If only one JS file exists and a reference is found, rename to match the reference
+        # JS: If only one JS file exists and a reference is found, rename to match the reference and update HTML reference to match the file name
         js_candidates = ext_to_files.get('.js', []) + ext_to_files.get('.javascript', [])
         if len(js_candidates) == 1 and referenced_js:
             old_name = js_candidates[0]
             for ref in referenced_js:
-                if ref not in file_map and ref.endswith('.js'):
+                if ref.endswith('.js'):
+                    # Always rename the file to match the HTML reference
                     rename_map[old_name] = ref
+                    # Also update all HTML code to reference the new file name
+                    for fname, (lang, code) in file_map.items():
+                        if lang.lower() in ["html", "htm"]:
+                            code = code.replace(old_name, ref).replace('app.js', ref)
+                            file_map[fname] = (lang, code)
                     break
-        # CSS: If only one CSS file exists and a reference is found, rename to match the reference
+        # CSS: If only one CSS file exists and a reference is found, rename to match the reference and update HTML reference to match the file name
         css_candidates = ext_to_files.get('.css', [])
         if len(css_candidates) == 1 and referenced_css:
             old_name = css_candidates[0]
             for ref in referenced_css:
-                if ref not in file_map and ref.endswith('.css'):
+                if ref.endswith('.css'):
                     rename_map[old_name] = ref
+                    for fname, (lang, code) in file_map.items():
+                        if lang.lower() in ["html", "htm"]:
+                            code = code.replace(old_name, ref).replace('style.css', ref)
+                            file_map[fname] = (lang, code)
                     break
         # Standard names fallback (as before)
         for ext, std_name in standard_names.items():
