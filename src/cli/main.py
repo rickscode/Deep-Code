@@ -162,10 +162,41 @@ def chat():
                     file_map = harmonize_file_names(file_map)
                     # Cross-file dependency fix
                     corrected_map = cross_file_dependency_fix(file_map)
+                    # --- Selector harmonization: ensure JS selectors match HTML IDs/classes ---
+                    corrected_map = harmonize_selectors(corrected_map)
                     # Save files
                     for fname, code in corrected_map.items():
                         file_path = os.path.join(folder_name, fname)
                         file_ops.write_file_atomic(file_path, code)
+                    # --- Post-process: Validate and fix incomplete code files ---
+                    def is_incomplete_js(js_code):
+                        # Heuristic: unclosed braces, abrupt EOF, missing function/closing
+                        open_braces = js_code.count('{')
+                        close_braces = js_code.count('}')
+                        if open_braces > close_braces:
+                            return True
+                        if js_code.strip().endswith(('function', '{', '(', '+', '-', '*', '/', '=')):
+                            return True
+                        # Very short file or abrupt ending
+                        if len(js_code.strip()) < 20:
+                            return True
+                        return False
+                    for fname in corrected_map:
+                        if fname.endswith('.js'):
+                            file_path = os.path.join(folder_name, fname)
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                js_code = f.read()
+                            if is_incomplete_js(js_code):
+                                # Re-prompt LLM to finish the code
+                                followup = f"The file `{fname}` is incomplete. Please generate the full, working code for this file as a single markdown code block. Do not output any lists or explanations, just the code block."
+                                messages.append({"role": "user", "content": followup})
+                                response = await client.chat_completion(messages, model=model)
+                                content = response.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+                                code_blocks = re.findall(r"```([a-zA-Z0-9]*)\n([\s\S]*?)```", content)
+                                for lang, code in code_blocks:
+                                    if lang.lower() in ['js', 'javascript']:
+                                        file_ops.write_file_atomic(file_path, code)
+                                        break
                     typer.echo(f"[Files created in ./{folder_name}/]")
                 else:
                     typer.echo(content)
@@ -439,6 +470,70 @@ def cross_file_dependency_fix(file_map):
         else:
             corrected[fname] = code
     return corrected
+
+def harmonize_selectors(file_map):
+    """
+    Cross-checks selectors (IDs/classes) used in JS against HTML, and auto-fixes mismatches.
+    - If JS references an ID/class not present in HTML, inject it into the HTML (on <body>).
+    - If HTML has IDs/classes not used in JS, leave them (harmless).
+    """
+    import re
+    from collections import defaultdict
+    # 1. Collect all HTML IDs/classes
+    html_ids = set()
+    html_classes = set()
+    html_files = [f for f in file_map if f.lower().endswith('.html')]
+    for fname in html_files:
+        code = file_map[fname][1]
+        html_ids.update(re.findall(r'id=["\']([\w\-]+)["\']', code))
+        html_classes.update(re.findall(r'class=["\']([\w\- ]+)["\']', code))
+    # 2. Collect all JS selector usages
+    js_files = [f for f in file_map if f.lower().endswith('.js')]
+    js_ids = set()
+    js_classes = set()
+    id_patterns = [
+        r'getElementById\(["\']([\w\-]+)["\']\)',
+        r'querySelector\(["\']#([\w\-]+)["\']\)',
+        r'getElementById\s*\(["\']([\w\-]+)["\']\)',
+        r'getElementsByName\(["\']([\w\-]+)["\']\)',
+    ]
+    class_patterns = [
+        r'getElementsByClassName\(["\']([\w\-]+)["\']\)',
+        r'querySelector\(["\']\\.([\w\-]+)["\']\)',
+        r'querySelectorAll\(["\']\\.([\w\-]+)["\']\)',
+    ]
+    for fname in js_files:
+        code = file_map[fname][1]
+        for pat in id_patterns:
+            js_ids.update(re.findall(pat, code))
+        for pat in class_patterns:
+            js_classes.update(re.findall(pat, code))
+    # 3. Find missing IDs/classes in HTML
+    missing_ids = js_ids - html_ids
+    missing_classes = js_classes - html_classes
+    if not missing_ids and not missing_classes:
+        return file_map  # Nothing to fix
+    # 4. Inject missing IDs/classes into HTML (on <body> tag)
+    new_file_map = dict(file_map)
+    for fname in html_files:
+        lang, code = file_map[fname]
+        # Add missing IDs
+        if missing_ids:
+            def inject_ids(match):
+                tag = match.group(0)
+                # Add all missing IDs as <div id="..."></div> before </body>
+                inject = ''.join([f'\n    <div id="{mid}"></div>' for mid in missing_ids])
+                return tag + inject
+            code = re.sub(r'(</body>)', inject_ids, code, count=1)
+        # Add missing classes
+        if missing_classes:
+            def inject_classes(match):
+                tag = match.group(0)
+                inject = ''.join([f'\n    <div class="{mc}"></div>' for mc in missing_classes])
+                return tag + inject
+            code = re.sub(r'(</body>)', inject_classes, code, count=1)
+        new_file_map[fname] = (lang, code)
+    return new_file_map
 
 if __name__ == "__main__":
     app()
