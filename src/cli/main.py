@@ -32,7 +32,9 @@ def chat():
     client = GroqClient(api_key)
     system_prompt = (
         "You are Deep Code, an open-source CLI coding agent.\n"
-        "When the user asks for an app or code, generate the code and save it to files in a new folder in the current directory.\n"
+        "When the user asks for an app or code, ALWAYS output each file as a separate markdown code block, e.g., ```html ... ```, ```js ... ```, etc.\n"
+        "Never output code as plain text or in lists—always use markdown code blocks for all code.\n"
+        "Generate the code and save it to files in a new folder in the current directory.\n"
         "If the user asks for a web app, create a folder named after the app (e.g., 'hello-world-app'), save the main file (e.g., index.html), and print the folder path.\n"
         "Do not ask the user to copy/paste code.\n"
         "If the user asks for a single file, save it in a new folder.\n"
@@ -112,22 +114,39 @@ def chat():
                     folder_name = 'deep-code-output'
                 # Try to extract code blocks and guess file names
                 code_blocks = re.findall(r"```([a-zA-Z0-9]*)\n([\s\S]*?)```", content)
+                # Try to extract file names from the assistant's message
+                file_names = {}
+                # Look for lines like * `filename.ext` or - `filename.ext`
+                for line in content.splitlines():
+                    match = re.match(r"[\*-]\s+`([^`]+)`", line.strip())
+                    if match:
+                        idx = len(file_names)
+                        file_names[idx] = match.group(1)
                 if code_blocks:
                     import os
                     os.makedirs(folder_name, exist_ok=True)
+                    # Build file map: {filename: (lang, code)}
+                    file_map = {}
                     for idx, (lang, code) in enumerate(code_blocks):
-                        # Guess file name from app name and language
-                        ext = lang if lang else "txt"
-                        base = folder_name.replace('-', '_')
-                        if ext in ["html", "htm"]:
-                            file_name = f"index.{ext}"
-                        elif ext in ["js", "jsx", "ts", "tsx"]:
-                            file_name = f"{base}.{ext}"
-                        elif ext in ["py", "sh", "bash"]:
-                            file_name = f"{base}.{ext}"
+                        if idx in file_names:
+                            file_name = file_names[idx]
                         else:
-                            file_name = f"{base}_file{idx+1}.{ext}"
-                        file_path = os.path.join(folder_name, file_name)
+                            ext = lang if lang else "txt"
+                            base = folder_name.replace('-', '_')
+                            if ext in ["html", "htm"]:
+                                file_name = f"index.{ext}"
+                            elif ext in ["js", "jsx", "ts", "tsx"]:
+                                file_name = f"app.{ext}"
+                            elif ext in ["py", "sh", "bash"]:
+                                file_name = f"{base}.{ext}"
+                            else:
+                                file_name = f"{base}_file{idx+1}.{ext}"
+                        file_map[file_name] = (lang, code)
+                    # Cross-file dependency fix
+                    corrected_map = cross_file_dependency_fix(file_map)
+                    # Save files
+                    for fname, code in corrected_map.items():
+                        file_path = os.path.join(folder_name, fname)
                         file_ops.write_file_atomic(file_path, code)
                     typer.echo(f"[Files created in ./{folder_name}/]")
                 else:
@@ -184,6 +203,113 @@ def config(set: bool = typer.Option(False, help="Set configuration interactively
         typer.echo("Configuration saved.")
     else:
         typer.echo(cfg)
+
+def cross_file_dependency_fix(file_map):
+    """
+    file_map: dict of {filename: (lang, code)}
+    Returns: dict of {filename: corrected_code}
+    """
+    import re
+    corrected = {}
+    all_files = set(file_map.keys())
+
+    # --- Registry of fixer functions ---
+    def html_fixer(fname, lang, code, all_files):
+        # Fix <script src>, <link href>, <img src>
+        def fix_script_src(match):
+            src = match.group(1)
+            if src not in all_files:
+                for f in all_files:
+                    if f.startswith(src.split(".")[0]):
+                        return f'<script src="{f}"></script>'
+            return match.group(0)
+        code = re.sub(r'<script src=["\']([^"\']+)["\']></script>', fix_script_src, code)
+        def fix_link_href(match):
+            href = match.group(1)
+            if href not in all_files:
+                for f in all_files:
+                    if f.startswith(href.split(".")[0]):
+                        return f'<link href="{f}" rel="stylesheet">'
+            return match.group(0)
+        code = re.sub(r'<link href=["\']([^"\']+)["\'] rel="stylesheet">', fix_link_href, code)
+        def fix_img_src(match):
+            src = match.group(1)
+            if src not in all_files:
+                for f in all_files:
+                    if f.startswith(src.split(".")[0]):
+                        return f'<img src="{f}">' 
+            return match.group(0)
+        code = re.sub(r'<img src=["\']([^"\']+)["\']>', fix_img_src, code)
+        return code
+
+    def js_fixer(fname, lang, code, all_files):
+        # Fix import ... from '...'
+        def fix_import(match):
+            imp = match.group(1)
+            if imp not in all_files:
+                for f in all_files:
+                    if f.startswith(imp.split(".")[0]):
+                        return f"import ... from './{f}'"
+            return match.group(0)
+        code = re.sub(r"import [^;]+ from ['\"](.+?)['\"]", fix_import, code)
+        return code
+
+    def py_fixer(fname, lang, code, all_files):
+        # Fix import ...
+        def fix_py_import(match):
+            mod = match.group(1)
+            for f in all_files:
+                if f.startswith(mod) and f.endswith('.py'):
+                    return f"import {f[:-3]}"
+            return match.group(0)
+        code = re.sub(r"import ([a-zA-Z0-9_]+)", fix_py_import, code)
+        return code
+
+    def css_fixer(fname, lang, code, all_files):
+        # Fix url('...')
+        def fix_css_url(match):
+            url = match.group(1)
+            if url not in all_files:
+                for f in all_files:
+                    if f.startswith(url.split(".")[0]):
+                        return f"url('{f}')"
+            return match.group(0)
+        code = re.sub(r"url\(['\"]?([^'\")]+)['\"]?\)", fix_css_url, code)
+        return code
+
+    def bash_fixer(fname, lang, code, all_files):
+        # Fix source ... or ./...
+        def fix_source(match):
+            src = match.group(1)
+            if src not in all_files:
+                for f in all_files:
+                    if f.startswith(src.split(".")[0]):
+                        return f"source {f}"
+            return match.group(0)
+        code = re.sub(r"source ([^\s]+)", fix_source, code)
+        return code
+
+    # Registry: lang -> fixer
+    fixers = {
+        "html": html_fixer,
+        "htm": html_fixer,
+        "js": js_fixer,
+        "jsx": js_fixer,
+        "ts": js_fixer,
+        "tsx": js_fixer,
+        "py": py_fixer,
+        "css": css_fixer,
+        "bash": bash_fixer,
+        "sh": bash_fixer,
+    }
+
+    for fname, (lang, code) in file_map.items():
+        fixer = fixers.get(lang.lower())
+        if fixer:
+            corrected[fname] = fixer(fname, lang, code, all_files)
+        else:
+            corrected[fname] = code
+    return corrected
 
 if __name__ == "__main__":
     app()
