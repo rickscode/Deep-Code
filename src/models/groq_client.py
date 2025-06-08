@@ -31,7 +31,9 @@ class GroqClient:
             response.raise_for_status()
             return response.json()
         except httpx.RequestError as e:
-            raise APIError(f"API request failed: {e}")
+            import traceback
+            tb = traceback.format_exc()
+            raise APIError(f"API request failed: {e.__class__.__name__}: {e}\nTraceback:\n{tb}")
         except httpx.HTTPStatusError as e:
             # Print status code and response text for debugging
             raise APIError(f"API returned error: {e.response.status_code} {e.response.text}")
