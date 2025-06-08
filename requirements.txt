@@ -1,0 +1,8 @@
+typer
+httpx
+pydantic
+gitpython
+toml
+pyyaml
+pytest
+pytest-asyncio

@@ -1,0 +1,9 @@
+# Conventional Commit Message Template
+
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer]
+
+# Types: feat, fix, docs, style, refactor, test, chore
