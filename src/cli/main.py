@@ -226,11 +226,11 @@ def cross_file_dependency_fix(file_map):
                 for f in all_files:
                     if f.startswith(src.split(".")[0]):
                         return f'<script src="{f}"></script>'
-                # If only one JS file exists, use it
+                # Always use the only JS file if there is just one
                 js_files = files_by_ext('.js')
                 if len(js_files) == 1:
                     return f'<script src="{js_files[0]}"></script>'
-            return match.group(0)
+            return f'<script src="{src}"></script>'
         code = re.sub(r'<script src=["\']([^"\']+)["\']></script>', fix_script_src, code)
         def fix_link_href(match):
             href = match.group(1)
@@ -238,11 +238,11 @@ def cross_file_dependency_fix(file_map):
                 for f in all_files:
                     if f.startswith(href.split(".")[0]):
                         return f'<link href="{f}" rel="stylesheet">'
-                # If only one CSS file exists, use it
+                # Always use the only CSS file if there is just one
                 css_files = files_by_ext('.css')
                 if len(css_files) == 1:
                     return f'<link href="{css_files[0]}" rel="stylesheet">'
-            return match.group(0)
+            return f'<link href="{href}" rel="stylesheet">'
         code = re.sub(r'<link href=["\']([^"\']+)["\'] rel="stylesheet">', fix_link_href, code)
         def fix_img_src(match):
             src = match.group(1)
@@ -250,11 +250,11 @@ def cross_file_dependency_fix(file_map):
                 for f in all_files:
                     if f.startswith(src.split(".")[0]):
                         return f'<img src="{f}">' 
-                # If only one image file exists, use it
+                # Always use the only image file if there is just one
                 img_files = [f for f in all_files if f.lower().endswith(('.png','.jpg','.jpeg','.gif','.svg'))]
                 if len(img_files) == 1:
                     return f'<img src="{img_files[0]}">' 
-            return match.group(0)
+            return f'<img src="{src}">' 
         code = re.sub(r'<img src=["\']([^"\']+)["\']>', fix_img_src, code)
         return code
 

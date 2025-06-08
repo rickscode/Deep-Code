@@ -1,6 +1,6 @@
 const todoInput = document.getElementById('todo-input');
 const todoList = document.getElementById('todo-list');
-const todos = [];
+const todos = JSON.parse(localStorage.getItem('todos')) || [];
 
 todoInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
@@ -10,12 +10,30 @@ todoInput.addEventListener('keypress', (e) => {
 });
 
 function addTodo(todo) {
-    const todoItem = document.createElement('li');
-    todoItem.textContent = todo;
-    todoList.appendChild(todoItem);
-    todos.push(todo);
+    const todoItem = {
+        text: todo,
+        completed: false
+    };
+    todos.push(todoItem);
+    localStorage.setItem('todos', JSON.stringify(todos));
+    renderTodoList();
 }
 
-// Add some sample todos
-addTodo('Buy milk');
-addTodo('Walk the dog');
+function renderTodoList() {
+    todoList.innerHTML = '';
+    todos.forEach((todo) => {
+        const todoElement = document.createElement('li');
+        todoElement.textContent = todo.text;
+        if (todo.completed) {
+            todoElement.classList.add('completed');
+        }
+        todoElement.addEventListener('click', () => {
+            todo.completed = !todo.completed;
+            localStorage.setItem('todos', JSON.stringify(todos));
+            renderTodoList();
+        });
+        todoList.appendChild(todoElement);
+    });
+}
+
+renderTodoList();

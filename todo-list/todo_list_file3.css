@@ -12,8 +12,15 @@ body {
 #todo-list li {
     padding: 10px;
     border-bottom: 1px solid #ccc;
+    display: flex;
+    justify-content: space-between;
 }
 
 #todo-list li:last-child {
     border-bottom: none;
+}
+
+.completed {
+    text-decoration: line-through;
+    color: #ccc;
 }
