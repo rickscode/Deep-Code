@@ -34,6 +34,8 @@ def chat():
         "You are Deep Code, an open-source CLI coding agent.\n"
         "When the user asks for an app or code, ALWAYS output each file as a separate markdown code block, e.g., ```html ... ```, ```js ... ```, etc.\n"
         "Never output code as plain text or in lists—always use markdown code blocks for all code.\n"
+        "Do NOT output file lists, plans, or explanations—ONLY output code blocks for each file.\n"
+        "If you output anything other than code blocks, it will be ignored.\n"
         "Generate the code and save it to files in a new folder in the current directory.\n"
         "If the user asks for a web app, create a folder named after the app (e.g., 'hello-world-app'), save the main file (e.g., index.html), and print the folder path.\n"
         "Do not ask the user to copy/paste code.\n"
@@ -114,6 +116,20 @@ def chat():
                     folder_name = 'deep-code-output'
                 # Try to extract code blocks and guess file names
                 code_blocks = re.findall(r"```([a-zA-Z0-9]*)\n([\s\S]*?)```", content)
+                # Fallback: If no code blocks, but a file list is detected, re-prompt for code
+                if not code_blocks:
+                    file_list = []
+                    for line in content.splitlines():
+                        m = re.match(r"[\*-]?\s*`?([\w\-/]+\.[a-zA-Z0-9]+)`?", line.strip())
+                        if m:
+                            file_list.append(m.group(1))
+                    if file_list:
+                        # Re-prompt the LLM to generate code for each file
+                        followup = f"Please generate the full code for these files, each as a separate markdown code block: {', '.join(file_list)}. Do not output any lists or explanations, just the code blocks."
+                        messages.append({"role": "user", "content": followup})
+                        response = await client.chat_completion(messages, model=model)
+                        content = response.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+                        code_blocks = re.findall(r"```([a-zA-Z0-9]*)\n([\s\S]*?)```", content)
                 # Try to extract file names from the assistant's message
                 file_names = {}
                 # Look for lines like * `filename.ext` or - `filename.ext`
@@ -231,13 +247,19 @@ def harmonize_file_names(file_map):
                 # <img src="...">
                 for m in re.findall(r'<img src=["\']([^"\']+)["\']>', code):
                     references['img'].add(m)
-        # Map extensions to actual files
-        ext_to_files = {ext: [f for f in file_map if f.endswith(ext)] for ext in ['.js', '.css', '.html']}
-        # For each type, if a standard reference exists but the file is named differently, rename and update references
+        # Map extensions to actual files, and allow for extension normalization (e.g., .javascript -> .js)
+        ext_aliases = {'.javascript': '.js', '.js': '.js', '.css': '.css', '.html': '.html'}
+        ext_to_files = {}
+        for ext in ['.js', '.css', '.html', '.javascript']:
+            ext_to_files[ext] = [f for f in file_map if f.endswith(ext)]
+        # For each type, if a standard reference exists but the file is named differently or has a nonstandard extension, rename and update references
         rename_map = {}
         for ext, std_name in standard_names.items():
-            # If the standard name is referenced but not present, and only one file of that type exists, rename it
-            if std_name not in file_map and len(ext_to_files[ext]) == 1:
+            # Accept alias extensions (e.g., .javascript for .js)
+            candidates = ext_to_files.get(ext, [])
+            if ext == '.js':
+                candidates += ext_to_files.get('.javascript', [])
+            if std_name not in file_map and len(candidates) == 1:
                 referenced = False
                 if ext == '.js' and std_name in references['js']:
                     referenced = True
@@ -246,8 +268,12 @@ def harmonize_file_names(file_map):
                 if ext == '.html':
                     referenced = True  # Always prefer index.html for html
                 if referenced or ext != '.html':
-                    old_name = ext_to_files[ext][0]
-                    rename_map[old_name] = std_name
+                    old_name = candidates[0]
+                    # Normalize extension if needed
+                    if ext == '.js' and old_name.endswith('.javascript'):
+                        rename_map[old_name] = std_name
+                    else:
+                        rename_map[old_name] = std_name
         # Apply renames and update all references in all files
         new_file_map = {}
         for fname, (lang, code) in file_map.items():
@@ -255,6 +281,10 @@ def harmonize_file_names(file_map):
             for old, new in rename_map.items():
                 code = code.replace(old, new)
             new_name = rename_map.get(fname, fname)
+            # JS syntax fix: remove unmatched closing braces at end
+            if new_name.endswith('.js'):
+                # Remove extra closing braces at end
+                code = re.sub(r'(\}\s*)+$', '', code)
             new_file_map[new_name] = (lang, code)
         return new_file_map
 
