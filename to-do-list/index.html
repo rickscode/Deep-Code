@@ -10,11 +10,26 @@
     <h1>Todo List App</h1>
     <form>
         <input type="text" id="todo-input" placeholder="Add new todo">
+        <select id="priority-select">
+            <option value="low">Low</option>
+            <option value="high">High</option>
+        </select>
+        <input type="date" id="due-date-input">
         <button type="submit">Add</button>
     </form>
     <ul id="todo-list">
         <!-- todo list will be rendered here -->
     </ul>
+    <div id="filter-controls">
+        <label>
+            Show:
+            <select id="filter-select">
+                <option value="all">All</option>
+                <option value="completed">Completed</option>
+                <option value="incomplete">Incomplete</option>
+            </select>
+        </label>
+    </div>
     <script src="script.js"></script>
 </body>
 </html>

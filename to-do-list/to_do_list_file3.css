@@ -24,3 +24,13 @@ body {
     text-decoration: line-through;
     color: #ccc;
 }
+
+.priority-high {
+    font-weight: bold;
+    color: #f00;
+}
+
+.priority-low {
+    font-weight: normal;
+    color: #000;
+}

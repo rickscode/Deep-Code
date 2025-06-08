@@ -142,6 +142,8 @@ def chat():
                             else:
                                 file_name = f"{base}_file{idx+1}.{ext}"
                         file_map[file_name] = (lang, code)
+                    # Harmonize file names and references before fixing dependencies
+                    file_map = harmonize_file_names(file_map)
                     # Cross-file dependency fix
                     corrected_map = cross_file_dependency_fix(file_map)
                     # Save files
@@ -203,6 +205,58 @@ def config(set: bool = typer.Option(False, help="Set configuration interactively
         typer.echo("Configuration saved.")
     else:
         typer.echo(cfg)
+
+def harmonize_file_names(file_map):
+        """
+        Rename files to match standard references if possible, and update all references in all files.
+        E.g., if HTML references style.css but only to_do_list_file3.css exists, rename the file and update all references.
+        """
+        import re
+        # Standard names for common file types
+        standard_names = {
+            '.js': 'app.js',
+            '.css': 'style.css',
+            '.html': 'index.html',
+        }
+        # Collect all references in all files
+        references = {'js': set(), 'css': set(), 'img': set()}
+        for fname, (lang, code) in file_map.items():
+            if lang.lower() in ["html", "htm"]:
+                # <script src="..."></script>
+                for m in re.findall(r'<script src=["\']([^"\']+)["\']></script>', code):
+                    references['js'].add(m)
+                # <link href="..." rel="stylesheet">
+                for m in re.findall(r'<link href=["\']([^"\']+)["\'] rel="stylesheet">', code):
+                    references['css'].add(m)
+                # <img src="...">
+                for m in re.findall(r'<img src=["\']([^"\']+)["\']>', code):
+                    references['img'].add(m)
+        # Map extensions to actual files
+        ext_to_files = {ext: [f for f in file_map if f.endswith(ext)] for ext in ['.js', '.css', '.html']}
+        # For each type, if a standard reference exists but the file is named differently, rename and update references
+        rename_map = {}
+        for ext, std_name in standard_names.items():
+            # If the standard name is referenced but not present, and only one file of that type exists, rename it
+            if std_name not in file_map and len(ext_to_files[ext]) == 1:
+                referenced = False
+                if ext == '.js' and std_name in references['js']:
+                    referenced = True
+                if ext == '.css' and std_name in references['css']:
+                    referenced = True
+                if ext == '.html':
+                    referenced = True  # Always prefer index.html for html
+                if referenced or ext != '.html':
+                    old_name = ext_to_files[ext][0]
+                    rename_map[old_name] = std_name
+        # Apply renames and update all references in all files
+        new_file_map = {}
+        for fname, (lang, code) in file_map.items():
+            # Update references in code
+            for old, new in rename_map.items():
+                code = code.replace(old, new)
+            new_name = rename_map.get(fname, fname)
+            new_file_map[new_name] = (lang, code)
+        return new_file_map
 
 def cross_file_dependency_fix(file_map):
     """
