@@ -1,4 +1,6 @@
-# ai-code: Open Source CLI Coding Agent
+# Deep-Code: Open Source CLI Coding Agent
+
+![Screenshot from 2025-06-08 23-35-07](https://github.com/user-attachments/assets/7c71830a-6b9e-4fdb-b2b1-3d3cf2c1a016)
 
 ## What is this?
 A free, open-source alternative to proprietary AI coding assistants (like Claude Code). Deep Code is a CLI tool that lets you:
