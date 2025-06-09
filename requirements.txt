@@ -6,3 +6,4 @@ toml
 pyyaml
 pytest
 pytest-asyncio
+autopep8

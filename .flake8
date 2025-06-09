@@ -1,0 +1,12 @@
+[flake8]
+max-line-length = 88
+ignore = 
+    F401,  # Imported but unused
+    F841,  # Local variable assigned but never used
+    F811,  # Redefinition of unused variable
+extend-ignore = E203, W503
+exclude = 
+    .git,
+    __pycache__,
+    .venv,
+    venv/
