@@ -7,3 +7,4 @@ pyyaml
 pytest
 pytest-asyncio
 autopep8
+chardet
