@@ -299,15 +299,17 @@ class CodeValidator:
         if not self.errors:
             return ""
         
-        prompt = "The generated code has the following errors that need to be fixed:\n\n"
+        # Limit to top 3 errors to save tokens
+        limited_errors = self.errors[:3]
         
-        for error in self.errors:
+        prompt = "Fix these code errors (output corrected code blocks only):\n\n"
+        
+        for error in limited_errors:
             prompt += f"• {error.file_name}: {error.description}\n"
-            if error.suggested_fix:
-                prompt += f"  Suggested fix: {error.suggested_fix}\n"
         
-        prompt += "\nPlease generate corrected versions of the affected files as markdown code blocks. "
-        prompt += "Make sure all file references are correct and all selectors match existing HTML elements. "
-        prompt += "Only output the corrected code blocks, no explanations."
+        if len(self.errors) > 3:
+            prompt += f"\n(+ {len(self.errors) - 3} more errors)\n"
+        
+        prompt += "\nOutput corrected files as markdown code blocks. No explanations."
         
         return prompt

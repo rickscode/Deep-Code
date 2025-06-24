@@ -1,0 +1,25 @@
+/* script.js */
+const colors = [
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
+    '#FFEEAD', '#D4A5A5', '#9D9CE3', '#E6E3EE'
+];
+
+function createColorBox(color) {
+    const container = document.querySelector('.color-container');
+    const box = document.createElement('div');
+    box.className = 'color-box';
+    box.style.backgroundColor = color;
+    
+    const hexCode = document.createElement('div');
+    hexCode.className = 'hex-code';
+    hexCode.textContent = color.toUpperCase();
+    
+    box.appendChild(hexCode);
+    container.appendChild(box);
+
+    box.addEventListener('click', () => {
+        navigator.clipboard.writeText(color);
+    });
+}
+
+colors.forEach(createColorBox);

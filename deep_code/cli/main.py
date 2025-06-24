@@ -34,7 +34,8 @@ def chat():
         raise typer.Exit(1)
     cfg = core_config.load_config()
     api_key = cfg["api"]["key"]
-    model = cfg["api"].get("default_model", "deepseek-r1-distill-llama-70b")
+    default_model = cfg["api"].get("default_model", "deepseek-r1-distill-llama-70b")
+    fallback_models = cfg["api"].get("fallback_models", [])
     if not api_key:
         typer.echo("[ERROR] No API key set. Run 'ai-code config --set' to set your Groq API key.")
         raise typer.Exit(1)
@@ -136,7 +137,7 @@ def chat():
                 continue
             messages.append({"role": "user", "content": user_input})
             try:
-                response = await client.chat_completion(messages, model=model)
+                response = await client.chat_completion_with_fallback(messages, default_model, fallback_models)
                 content = response.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
                 app_name_match = re.search(r'build (?:me )?a[n]? ([\w\- ]+?)(?: app| web app| project| application|$)', user_input, re.IGNORECASE)
                 if app_name_match:
@@ -159,7 +160,7 @@ def chat():
                             "Do not output any lists or explanations, just the code blocks."
                         )
                         messages.append({"role": "user", "content": followup})
-                        response = await client.chat_completion(messages, model=model)
+                        response = await client.chat_completion_with_fallback(messages, default_model, fallback_models)
                         content = response.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
                         code_blocks = re.findall(r"```([a-zA-Z0-9]*)\n([\s\S]*?)```", content)
                 file_names = {}
@@ -218,7 +219,7 @@ def chat():
                                     "Do not output any lists or explanations, just the code block."
                                 )
                                 messages.append({"role": "user", "content": followup})
-                                response = await client.chat_completion(messages, model=model)
+                                response = await client.chat_completion_with_fallback(messages, default_model, fallback_models)
                                 content = response.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
                                 code_blocks = re.findall(r"```([a-zA-Z0-9]*)\n([\s\S]*?)```", content)
                                 for lang, code in code_blocks:
@@ -230,9 +231,9 @@ def chat():
                     validator = CodeValidator(folder_name)
                     errors = validator.validate_all()
                     
-                    # Auto-fix up to 3 rounds if errors are found
+                    # Auto-fix up to 2 rounds if errors are found (reduced to save tokens)
                     fix_rounds = 0
-                    max_fix_rounds = 3
+                    max_fix_rounds = 2
                     
                     while errors and fix_rounds < max_fix_rounds:
                         fix_rounds += 1
@@ -242,7 +243,7 @@ def chat():
                         messages.append({"role": "user", "content": fix_prompt})
                         
                         try:
-                            fix_response = await client.chat_completion(messages, model=model)
+                            fix_response = await client.chat_completion_with_fallback(messages, default_model, fallback_models)
                             fix_content = fix_response.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
                             fix_code_blocks = re.findall(r"```([a-zA-Z0-9]*)\n([\s\S]*?)```", fix_content)
                             

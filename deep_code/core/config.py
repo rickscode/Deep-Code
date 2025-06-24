@@ -10,7 +10,11 @@ DEFAULT_CONFIG = {
         "provider": "groq",
         "key": os.environ.get("GROQ_API_KEY", ""),
         "default_model": "deepseek-r1-distill-llama-70b",
-        "fallback_model": "deepseek-r1-distill-llama-70b"
+        "fallback_models": [
+            "llama-3.3-70b-versatile",
+            "meta-llama/llama-4-maverick-17b-128e-instruct",
+            "meta-llama/llama-4-scout-17b-16e-instruct"
+        ]
     },
     "editor": {
         "auto_save": True,
