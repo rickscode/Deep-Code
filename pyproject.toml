@@ -17,8 +17,15 @@ dependencies = [
     "pydantic",
     "gitpython",
     "toml",
-    "pyyaml"
+    "pyyaml",
+    "python-slugify",
+    "beautifulsoup4",
+    "chardet"
 ]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["deep_code*"]
+
 [project.scripts]
-ai-code = "src.cli.main:app"
+deep-code = "deep_code.cli.entry:main"

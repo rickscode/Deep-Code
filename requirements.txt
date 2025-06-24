@@ -8,3 +8,4 @@ pytest
 pytest-asyncio
 autopep8
 chardet
+beautifulsoup4

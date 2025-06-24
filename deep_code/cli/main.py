@@ -22,11 +22,10 @@ def chat():
     import sys
     import os
     import re
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src')))
-    from core import config as core_config
-    from models.groq_client import GroqClient, APIError
-    from operations import file_ops
-    from operations.code_validator import CodeValidator
+    from deep_code.core import config as core_config
+    from deep_code.models.groq_client import GroqClient, APIError
+    from deep_code.operations import file_ops
+    from deep_code.operations.code_validator import CodeValidator
     import asyncio
     try:
         from slugify import slugify
@@ -102,7 +101,31 @@ def chat():
     ]
 
     async def run_agent():
-        typer.echo("[Deep Code Agent] Type your request. Type '/exit' to quit.")
+        # ASCII Banner
+        banner = """
+╭─────────────────────────────────────────────────────────────────╮
+│                                                                 │
+│  ██████╗ ███████╗███████╗██████╗      ██████╗ ██████╗ ██████╗ ███████╗  │
+│  ██╔══██╗██╔════╝██╔════╝██╔══██╗    ██╔════╝██╔═══██╗██╔══██╗██╔════╝  │
+│  ██║  ██║█████╗  █████╗  ██████╔╝    ██║     ██║   ██║██║  ██║█████╗    │
+│  ██║  ██║██╔══╝  ██╔══╝  ██╔═══╝     ██║     ██║   ██║██║  ██║██╔══╝    │
+│  ██████╔╝███████╗███████╗██║         ╚██████╗╚██████╔╝██████╔╝███████╗  │
+│  ╚═════╝ ╚══════╝╚══════╝╚═╝          ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝  │
+│                                                                 │
+│               🤖 Your Free Terminal-Based Coding Assistant 🤖              │
+│                                                                 │
+│  ✨ Powered by DeepSeek  •  ⚡ Auto-Fix Errors  •  🚀 Build Apps Fast ✨    │
+│                                                                 │
+╰─────────────────────────────────────────────────────────────────╯
+
+"""
+        typer.echo(banner)
+        typer.echo("💡 Just describe what you want to build and I'll create it for you!")
+        typer.echo("📁 Files will be automatically saved and validated")
+        typer.echo("🔧 Any errors will be detected and fixed automatically")
+        typer.echo("🚪 Type '/exit' to quit\n")
+        typer.echo("═" * 70)
+        typer.echo()
         import re
         while True:
             user_input = input("You: ").strip()
@@ -230,9 +253,29 @@ def chat():
                                     if lang.lower() in ['html', 'htm'] or 'html' in lang.lower():
                                         file_name = 'index.html'
                                     elif lang.lower() in ['js', 'javascript']:
-                                        file_name = 'app.js'
+                                        # Check if HTML references a specific JS file name
+                                        js_ref = None
+                                        index_path = os.path.join(folder_name, 'index.html')
+                                        if os.path.exists(index_path):
+                                            with open(index_path, 'r') as f:
+                                                html_content = f.read()
+                                                script_match = re.search(r'<script[^>]+src=["\'](.*?\.js)["\']', html_content, re.IGNORECASE)
+                                                if script_match:
+                                                    js_ref = script_match.group(1)
+                                        
+                                        file_name = js_ref if js_ref else 'app.js'
                                     elif lang.lower() == 'css':
-                                        file_name = 'style.css'
+                                        # Check if HTML references a specific CSS file name
+                                        css_ref = None
+                                        index_path = os.path.join(folder_name, 'index.html')
+                                        if os.path.exists(index_path):
+                                            with open(index_path, 'r') as f:
+                                                html_content = f.read()
+                                                css_match = re.search(r'<link[^>]+href=["\'](.*?\.css)["\']', html_content, re.IGNORECASE)
+                                                if css_match:
+                                                    css_ref = css_match.group(1)
+                                        
+                                        file_name = css_ref if css_ref else 'style.css'
                                     else:
                                         # Try to find matching file by extension
                                         ext = lang if lang else "txt"
@@ -243,8 +286,8 @@ def chat():
                                             continue
                                     
                                     file_path = os.path.join(folder_name, file_name)
-                                    if os.path.exists(file_path):
-                                        file_ops.write_file_atomic(file_path, code)
+                                    # Create the file even if it doesn't exist
+                                    file_ops.write_file_atomic(file_path, code)
                                 
                                 # Re-validate after fixes
                                 validator = CodeValidator(folder_name)
@@ -293,8 +336,7 @@ def config(set: bool = typer.Option(False, help="Set configuration interactively
     """Show or set configuration."""
     import sys
     import os
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src')))
-    from core import config as core_config
+    from deep_code.core import config as core_config
     cfg = core_config.load_config()
     if set:
         typer.echo("Configure your Groq API key for DeepSeek.")
